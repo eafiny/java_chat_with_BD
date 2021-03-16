@@ -18,11 +18,13 @@ import javafx.stage.Modality;
 import javafx.stage.Stage;
 import javafx.stage.StageStyle;
 
-import java.io.DataInputStream;
-import java.io.DataOutputStream;
-import java.io.IOException;
+import java.io.*;
 import java.net.Socket;
 import java.net.URL;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
+import java.util.List;
 import java.util.ResourceBundle;
 
 public class Controller implements Initializable {
@@ -53,7 +55,7 @@ public class Controller implements Initializable {
     private Stage regStage;
     private RegController regController;
 
-    public void setAuthenticated(boolean authenticated) {
+    public void setAuthenticated(boolean authenticated, String nickname) {
         this.authenticated = authenticated;
         msgPanel.setVisible(authenticated);
         msgPanel.setManaged(authenticated);
@@ -67,6 +69,15 @@ public class Controller implements Initializable {
         }
         textArea.clear();
         setTitle(nickname);
+        try {
+            //List<String> lines = Files.readAllLines(Path.of("movies.tsv"));
+            List<String> lines = Files.readAllLines(Paths.get("Client_History_Files/history_" + nickname + ".txt"));
+            for (String s:lines) {
+                textArea.appendText(s + '\n');
+            }
+        }catch (IOException e){
+            e.printStackTrace();
+        }
     }
 
     @Override
@@ -84,7 +95,7 @@ public class Controller implements Initializable {
                 }
             });
         });
-        setAuthenticated(false);
+        setAuthenticated(false, nickname);
     }
 
     private void connect() {
@@ -92,6 +103,7 @@ public class Controller implements Initializable {
             socket = new Socket(IP_ADDRESS, PORT);
             in = new DataInputStream(socket.getInputStream());
             out = new DataOutputStream(socket.getOutputStream());
+
 
             new Thread(() -> {
                 try {
@@ -106,7 +118,8 @@ public class Controller implements Initializable {
                             if (str.startsWith(Command.AUTH_OK)) {
                                 String[] token = str.split("\\s");
                                 nickname = token[1];
-                                setAuthenticated(true);
+
+                                setAuthenticated(true, nickname);
                                 break;
                             }
 
@@ -122,8 +135,10 @@ public class Controller implements Initializable {
                         }
                     }
                     //цикл работы
+                    BufferedWriter f = new BufferedWriter(new FileWriter("Client_History_Files/history_" + nickname + ".txt", true));
                     while (true) {
                         String str = in.readUTF();
+
 
                         if (str.startsWith("/")) {
                             if (str.equals(Command.END)) {
@@ -142,14 +157,17 @@ public class Controller implements Initializable {
 
                         } else {
                             textArea.appendText(str + "\n");
+                            f.write(str + '\n');
                         }
+
                     }
+                    f.close();
                 } catch (RuntimeException e) {
                     System.out.println(e.getMessage());
                 } catch (IOException e) {
                     e.printStackTrace();
                 } finally {
-                    setAuthenticated(false);
+                    setAuthenticated(false, nickname);
                     try {
                         socket.close();
                     } catch (IOException e) {
@@ -157,7 +175,6 @@ public class Controller implements Initializable {
                     }
                 }
             }).start();
-
 
         } catch (IOException e) {
             e.printStackTrace();
@@ -167,6 +184,7 @@ public class Controller implements Initializable {
     public void sendMsg(ActionEvent actionEvent) {
         try {
             out.writeUTF(textField.getText());
+
             textField.clear();
             textField.requestFocus();
         } catch (IOException e) {
